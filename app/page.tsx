@@ -1,3 +1,5 @@
+import photoEntries from "../public/photos/photos.json";
+
 const research = [
   {
     n: "01",
@@ -55,11 +57,21 @@ const education = [
   ["2015–2019", "B.S. in Bioengineering", "School of Life Sciences, South China Normal University · Guangzhou"],
 ];
 
-const photos = [
+const photoPlaceholders = [
   ["01", "Places I go", "For landscapes, streets and small discoveries."],
   ["02", "Things I notice", "For books, exhibitions and everyday details."],
   ["03", "Life in between", "For good food, friends and unhurried moments."],
 ];
+
+type PhotoEntry = {
+  id: string;
+  image: string;
+  title?: string;
+  caption?: string;
+  date: string;
+};
+
+const publishedPhotos = photoEntries as PhotoEntry[];
 
 export default function Home() {
   return (
@@ -189,15 +201,33 @@ export default function Home() {
             <h2>A small archive<br />of ordinary days.</h2>
             <p>Science is only part of the picture. This space is reserved for the places, people and quiet interests that shape the rest of my life.</p>
           </div>
-          <div className="photo-grid">
-            {photos.map(([number, title, description]) => (
-              <article className="photo-card" key={number}>
-                <div className="photo-space"><span>{number}</span><p>your photo</p></div>
-                <h3>{title}</h3>
-                <p>{description}</p>
-              </article>
-            ))}
-          </div>
+          {publishedPhotos.length > 0 ? (
+            <div className="photo-grid photo-grid-published">
+              {publishedPhotos.map((photo, index) => (
+                <figure className="photo-card photo-entry" key={photo.id}>
+                  <div className="photo-space photo-filled">
+                    <img src={photo.image} alt={photo.caption || photo.title || `A moment from Cha Lin's life ${index + 1}`} />
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                  </div>
+                  <figcaption>
+                    {photo.title && <h3>{photo.title}</h3>}
+                    {photo.caption && <p>{photo.caption}</p>}
+                    <time dateTime={photo.date}>{photo.date}</time>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          ) : (
+            <div className="photo-grid">
+              {photoPlaceholders.map(([number, title, description]) => (
+                <article className="photo-card" key={number}>
+                  <div className="photo-space"><span>{number}</span><p>your photo</p></div>
+                  <h3>{title}</h3>
+                  <p>{description}</p>
+                </article>
+              ))}
+            </div>
+          )}
           <p className="upload-note">Photos can be added gradually — the layout will grow with your collection.</p>
         </div>
       </section>

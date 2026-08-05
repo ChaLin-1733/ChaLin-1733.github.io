@@ -1,9 +1,5 @@
 # Hobby photos
 
-Add your photos to this folder. Short, web-friendly names work best, for example:
-
-- `hiking.jpg`
-- `coffee-and-books.jpg`
-- `museum-day.jpg`
-
-Then replace one of the `.photo-empty` blocks in `app/page.tsx` with an image using its `/photos/filename.jpg` path.
+Photos in this folder are managed by the local **Cha Lin Photo Publisher** app.
+The app creates privacy-safe WebP images and updates `photos.json`; the website
+reads that file during deployment to render the Life gallery.
