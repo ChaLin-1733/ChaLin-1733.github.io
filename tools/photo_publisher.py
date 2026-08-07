@@ -7,6 +7,9 @@ import sys
 import threading
 import uuid
 import webbrowser
+import base64
+import urllib.error
+import urllib.request
 from datetime import date, datetime
 from pathlib import Path
 from tkinter import BooleanVar, StringVar, Text, Tk, filedialog, messagebox
@@ -74,6 +77,146 @@ def make_web_photo(source: Path, destination: Path) -> None:
             image = image.convert("RGB")
         destination.parent.mkdir(parents=True, exist_ok=True)
         image.save(destination, "WEBP", quality=86, method=6)
+
+
+def _github_credential(root: Path) -> str:
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    result = subprocess.run(
+        ["git", "credential", "fill"],
+        cwd=root,
+        input="protocol=https\nhost=github.com\n\n",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        creationflags=flags,
+        env={**os.environ, "GCM_INTERACTIVE": "Never"},
+    )
+    values = {}
+    for line in result.stdout.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    token = values.get("password")
+    if not token:
+        raise RuntimeError("找不到已保存的 GitHub 登录信息，请先在浏览器或 GitHub 中登录。")
+    return token
+
+
+def _github_api(token: str, method: str, path: str, payload=None):
+    url = f"https://api.github.com/repos/ChaLin-1733/ChaLin-1733.github.io{path}"
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "Cha-Lin-Photo-Publisher",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=35) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        try:
+            detail = json.loads(error.read().decode("utf-8")).get("message", str(error))
+        except Exception:
+            detail = str(error)
+        raise RuntimeError(f"GitHub 拒绝了发布：{detail}") from error
+    except urllib.error.URLError as error:
+        raise RuntimeError(f"无法连接 GitHub：{error.reason}") from error
+
+
+def _index_file_bytes(root: Path, relative_path: str) -> bytes:
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    result = subprocess.run(
+        ["git", "show", f":{relative_path}"],
+        cwd=root,
+        capture_output=True,
+        creationflags=flags,
+    )
+    if result.returncode:
+        raise RuntimeError(f"无法读取准备发布的文件：{relative_path}")
+    return result.stdout
+
+
+def publish_with_github_api(root: Path, relative_files: list[str], message: str) -> None:
+    already_staged = run_git(root, "diff", "--cached", "--name-only")
+    if already_staged:
+        raise RuntimeError("网站文件夹中有尚未完成的发布，请先处理后再试。")
+
+    run_git(root, "add", "--", *relative_files)
+    parent_sha = run_git(root, "rev-parse", "HEAD")
+    expected_tree = run_git(root, "write-tree")
+    token = _github_credential(root)
+
+    remote_ref = _github_api(token, "GET", "/git/ref/heads/main")
+    if remote_ref["object"]["sha"] != parent_sha:
+        raise RuntimeError("线上网站刚刚有其他更新。为避免覆盖，请稍后重试。")
+    parent_commit = _github_api(token, "GET", f"/git/commits/{parent_sha}")
+
+    tree_items = []
+    for relative_path in relative_files:
+        content = _index_file_bytes(root, relative_path)
+        blob = _github_api(
+            token,
+            "POST",
+            "/git/blobs",
+            {"content": base64.b64encode(content).decode("ascii"), "encoding": "base64"},
+        )
+        local_blob = run_git(root, "rev-parse", f":{relative_path}")
+        if blob["sha"] != local_blob:
+            raise RuntimeError(f"文件校验失败：{relative_path}")
+        tree_items.append({"path": relative_path, "mode": "100644", "type": "blob", "sha": blob["sha"]})
+
+    tree = _github_api(
+        token,
+        "POST",
+        "/git/trees",
+        {"base_tree": parent_commit["tree"]["sha"], "tree": tree_items},
+    )
+    if tree["sha"] != expected_tree:
+        raise RuntimeError("发布内容校验失败，线上文件没有被修改。")
+
+    author_name = run_git(root, "config", "user.name") or "Cha Lin"
+    author_email = run_git(root, "config", "user.email") or "linch58@mail2.sysu.edu.cn"
+    now = datetime.now().astimezone().replace(microsecond=0)
+    identity = {"name": author_name, "email": author_email, "date": now.isoformat()}
+    commit = _github_api(
+        token,
+        "POST",
+        "/git/commits",
+        {"message": message, "tree": tree["sha"], "parents": [parent_sha], "author": identity, "committer": identity},
+    )
+
+    offset = now.strftime("%z")
+    timestamp = int(now.timestamp())
+    commit_object = (
+        f"tree {tree['sha']}\n"
+        f"parent {parent_sha}\n"
+        f"author {author_name} <{author_email}> {timestamp} {offset}\n"
+        f"committer {author_name} <{author_email}> {timestamp} {offset}\n\n"
+        f"{message}"
+    ).encode("utf-8")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    local_object = subprocess.run(
+        ["git", "hash-object", "-t", "commit", "-w", "--stdin"],
+        cwd=root,
+        input=commit_object,
+        capture_output=True,
+        creationflags=flags,
+        check=True,
+    ).stdout.decode("ascii").strip()
+    if local_object != commit["sha"]:
+        raise RuntimeError("发布记录校验失败，线上文件没有被修改。")
+
+    _github_api(token, "PATCH", "/git/refs/heads/main", {"sha": commit["sha"], "force": False})
+    run_git(root, "update-ref", "refs/heads/main", commit["sha"], parent_sha)
+    run_git(root, "update-ref", "refs/remotes/origin/main", commit["sha"])
 
 
 class PublisherApp:
@@ -270,12 +413,12 @@ class PublisherApp:
             temporary.write_text(json.dumps(entries, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             os.replace(temporary, json_path)
 
-            run_git(self.root_path, "add", "--", "public/photos/photos.json", f"public/photos/{destination.name}")
-            run_git(self.root_path, "commit", "-m", f"Add life photo for {published_date}")
+            publish_with_github_api(
+                self.root_path,
+                ["public/photos/photos.json", f"public/photos/{destination.name}"],
+                f"Add life photo for {published_date}",
+            )
             committed = True
-            self.pending_push = True
-            run_git(self.root_path, "push", "origin", "main")
-            self.pending_push = False
             self.root.after(0, self._publish_success)
         except Exception as exc:
             if not committed:
