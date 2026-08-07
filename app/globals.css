@@ -92,14 +92,15 @@ h1, h2, h3 { text-wrap: balance; }
 .life-heading h2 { margin-top: 15px; }.life-heading > p:last-child { max-width: 600px; color: #716661; }
 .photo-grid { display: grid; grid-template-columns: 1.08fr .92fr .92fr; gap: 22px; align-items: end; }
 .photo-space { height: 290px; border: 1px solid rgba(91,77,72,.25); background: rgba(255,255,255,.26); display: flex; align-items: flex-end; justify-content: space-between; padding: 12px; color: #8e7973; }
-.photo-card:first-child .photo-space { height: 350px; }
+.photo-card:not(.photo-entry):first-child .photo-space { height: 350px; }
 .photo-space span { font: italic 13px var(--font-display), Georgia, serif; }.photo-space p { margin: 0; font-size: 9px; text-transform: uppercase; letter-spacing: .13em; }
 .photo-card h3 { margin: 16px 0 2px; font: 400 18px var(--font-display), Georgia, serif; }
 .photo-card > p { margin: 0; color: #766963; font-size: 11px; }
+.photo-grid-published { align-items: start; }
 .photo-entry { margin: 0; min-width: 0; }
-.photo-filled { position: relative; padding: 0; overflow: hidden; background: #e6d8d3; }
+.photo-filled { position: relative; height: auto; padding: 0; overflow: hidden; background: #e6d8d3; }
 .photo-filled::after { content: ""; position: absolute; inset: auto 0 0; height: 30%; background: linear-gradient(transparent, rgba(35, 29, 27, .38)); pointer-events: none; }
-.photo-filled img { width: 100%; height: 100%; display: block; object-fit: cover; transition: transform .45s ease; }
+.photo-filled img { width: 100%; height: auto; display: block; transition: transform .45s ease; }
 .photo-entry:hover .photo-filled img { transform: scale(1.015); }
 .photo-filled span { position: absolute; left: 13px; bottom: 10px; z-index: 1; color: rgba(255,255,255,.9); text-shadow: 0 1px 5px rgba(0,0,0,.2); }
 .photo-entry figcaption { padding-top: 14px; }
@@ -132,7 +133,7 @@ footer .section-label { color: #aeb9b0; } footer h2 { margin-top: 17px; margin-b
   .section-intro h2, .life-heading h2, footer h2 { font-size: 35px; }.methods p { width: 100%; margin-bottom: 8px; }
   .paper { grid-template-columns: 48px 1fr; gap: 14px; }.paper h3 { font-size: 17px; }
   .education article { grid-template-columns: 1fr; gap: 2px; padding: 19px 0; }.recognition { grid-template-columns: 1fr; gap: 20px; }
-  .photo-grid { grid-template-columns: 1fr; gap: 42px; }.photo-space, .photo-card:first-child .photo-space { height: 330px; }
+  .photo-grid { grid-template-columns: 1fr; gap: 42px; }.photo-card:not(.photo-entry) .photo-space { height: 330px; }
   .footer-main { grid-template-columns: 1fr; gap: 55px; }.footer-bottom { margin-top: 55px; }
 }
 
